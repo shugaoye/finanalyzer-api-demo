@@ -158,9 +158,18 @@ npx wrangler login
 ### 4.3 正式部署
 
 ```bash
+# 推荐：直接调用 wrangler，不受任何包管理器影响
+npx wrangler deploy
+
+# 或者：使用 package.json 中定义的脚本（npm / yarn 环境）
 npm run deploy
-# 等价于：npx wrangler deploy
+
+# pnpm 用户请用下面这条，因为 `pnpm deploy` 是 pnpm 自带的内置命令，会与本项目的 deploy 脚本冲突
+pnpm run cf:deploy
 ```
+
+> **为什么你会看到 `ERR_PNPM_CANNOT_DEPLOY`？**
+> pnpm 有一个与本项目无关的内置子命令 `pnpm deploy`（用于它自己的 workspace 产物拷贝）。当你在本项目运行 `pnpm deploy`（或某些别名场景下的 `pnpm run deploy`）时，pnpm 会优先执行自己的内置命令，而非 `package.json` 中的 `"deploy": "wrangler deploy"`，因此报错 *"A deploy is only possible from inside a workspace"*。解决方式如上：改用 `npx wrangler deploy`、`npm run deploy`，或 `pnpm run cf:deploy`。
 
 首次部署成功后，终端会打印类似：
 
@@ -194,7 +203,8 @@ npx wrangler versions list
 git pull                 # 如果使用 git
 npm install              # 仅当依赖有变化时
 npm run check            # 类型检查
-npm run deploy           # 重新发布新版本
+npx wrangler deploy      # 重新发布新版本（最可靠，与包管理器无关）
+# 或者：npm run deploy / pnpm run cf:deploy
 ```
 
 每次 `wrangler deploy` 会创建一个新的部署版本，Cloudflare 控制台（**Workers & Pages → finanalyzer-api-demo → Deployments**）保留历史，需要回滚时可在网页版一键切换版本。
