@@ -13,7 +13,7 @@
     "generate:openapi": "node scripts/generate-openapi-ts.js"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20240620.0",
+    "@cloudflare/workers-types": "^4.20260621.1",
     "@types/node": "^20.12.7",
     "typescript": "^5.4.5",
     "wrangler": "^3.63.0"
