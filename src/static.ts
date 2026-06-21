@@ -1,31 +1,68 @@
-export const appsJson = {
-  name: "finanalyzer-workspace",
-  version: "1.5.12",
-  apps: [
-    {
-      id: "portfolio",
-      name: "组合管理",
-      description: "管理投资组合、交易记录与持仓分析。",
-      url: "/#/portfolio",
-      icon: "wallet",
-      default: true,
-    },
-    {
-      id: "market",
-      name: "市场行情",
-      description: "股票历史价格、行情筛选器与标的信息。",
-      url: "/#/market",
-      icon: "trending-up",
-    },
-    {
-      id: "dashboard",
-      name: "仪表盘",
-      description: "自定义仪表盘与可视化部件。",
-      url: "/#/dashboard",
-      icon: "layout",
-    },
-  ],
-};
+export const appsJson = [
+  {
+    name: "Portfolio",
+    description: "Manage investment portfolio, transactions, and position analysis.",
+    img: "",
+    allowCustomization: true,
+    selected_agent: "finanalyzer-copilot",
+    tabs: [
+      {
+        id: "portfolio-main",
+        name: "Portfolio",
+        layout: [],
+      },
+    ],
+    groups: [],
+    prompts: [
+      "Show my portfolio summary",
+      "What are my top holdings by value?",
+      "Display recent transactions",
+    ],
+    mcp_servers: [],
+  },
+  {
+    name: "Market",
+    description: "Stock historical prices, market screener, and ticker information.",
+    img: "",
+    allowCustomization: true,
+    selected_agent: "finanalyzer-copilot",
+    tabs: [
+      {
+        id: "market-main",
+        name: "Market",
+        layout: [],
+      },
+    ],
+    groups: [],
+    prompts: [
+      "Show historical price for AAPL",
+      "Screen Chinese tech stocks",
+      "Get ticker info for 600519.SH",
+    ],
+    mcp_servers: [],
+  },
+  {
+    name: "Dashboard",
+    description: "Custom dashboards with customizable widgets and visualizations.",
+    img: "",
+    allowCustomization: true,
+    selected_agent: "finanalyzer-copilot",
+    tabs: [
+      {
+        id: "dashboard-main",
+        name: "Dashboard",
+        layout: [],
+      },
+    ],
+    groups: [],
+    prompts: [
+      "Create a new dashboard",
+      "Show my existing dashboards",
+      "Add a chart widget to dashboard",
+    ],
+    mcp_servers: [],
+  },
+];
 
 export const agentsJson = {
   version: "1.0.0",
@@ -33,80 +70,229 @@ export const agentsJson = {
     {
       id: "finanalyzer-copilot",
       name: "Finanalyzer Copilot",
-      description: "负责处理金融查询、指标计算与组合分析的默认代理。",
-      holder_url: "",
+      description: "AI agent for financial queries, metrics calculation, and portfolio analysis.",
       features: { query: true, terminate: true, sessions: true },
     },
   ],
   tools: [
-    { name: "historical_price", url: "/api/v1/cn/equity/price/historical", description: "获取历史价格" },
-    { name: "screener", url: "/api/v1/cn/equity/screener", description: "选股器" },
-    { name: "ticker_info", url: "/api/v1/cn/equity/ticker_information", description: "标的信息" },
-    { name: "key_metrics", url: "/api/v1/portfolio/key_metrics", description: "关键指标" },
-    { name: "news", url: "/api/v1/portfolio/news", description: "相关新闻" },
-    { name: "ticker_search", url: "/api/v1/widgets/ticker_search", description: "标的搜索" },
+    { name: "historical_price", url: "/api/v1/cn/equity/price/historical", description: "Get historical prices" },
+    { name: "screener", url: "/api/v1/cn/equity/screener", description: "Stock screener" },
+    { name: "ticker_info", url: "/api/v1/cn/equity/ticker_information", description: "Ticker information" },
+    { name: "key_metrics", url: "/api/v1/portfolio/key_metrics", description: "Key metrics" },
+    { name: "news", url: "/api/v1/portfolio/news", description: "Related news" },
+    { name: "ticker_search", url: "/api/v1/widgets/ticker_search", description: "Ticker search" },
   ],
 };
 
-export const widgetsJson = {
-  version: "1.0.0",
-  widgets: [
-    {
-      uuid: "w-historical-price",
-      origin: "core",
-      widget_id: "cn.equity.price.historical",
-      name: "历史价格",
-      description: "展示指定标的历史价格数据。",
-      params: [
-        { name: "symbol", type: "ticker", description: "标的代码", default_value: "600519.SH" },
-        { name: "interval", type: "string", description: "数据间隔", default_value: "1d" },
-      ],
+export const widgetsJson: Record<string, object> = {
+  "w-historical-price": {
+    name: "Historical Price",
+    description: "Display historical price data for a given symbol.",
+    category: "Equity",
+    subCategory: "Price",
+    endpoint: "/api/v1/cn/equity/price/historical",
+    type: "chart",
+    gridData: { w: 20, h: 8, minW: 10, minH: 6 },
+    params: [
+      {
+        paramName: "symbol",
+        value: "600519.SH",
+        label: "Symbol",
+        type: "text",
+        description: "Ticker symbol, e.g., 600519.SH",
+      },
+      {
+        paramName: "interval",
+        value: "1d",
+        label: "Interval",
+        type: "text",
+        description: "Data interval: 1d, 1w, 1m",
+      },
+      {
+        paramName: "start_date",
+        value: "",
+        label: "Start Date",
+        type: "date",
+        description: "Start date (YYYY-MM-DD)",
+      },
+      {
+        paramName: "end_date",
+        value: "",
+        label: "End Date",
+        type: "date",
+        description: "End date (YYYY-MM-DD)",
+      },
+    ],
+    data: {
+      chart: { type: "line" },
     },
-    {
-      uuid: "w-screener",
-      origin: "core",
-      widget_id: "cn.equity.screener",
-      name: "选股器",
-      description: "基于策略筛选器返回股票列表。",
-      params: [
-        { name: "market", type: "string", description: "市场", default_value: "SH" },
-        { name: "strategy_rate", type: "number", description: "策略率", default_value: 0.2 },
-      ],
+  },
+  "w-screener": {
+    name: "Stock Screener",
+    description: "Screen stocks based on strategy filters.",
+    category: "Equity",
+    subCategory: "Screener",
+    endpoint: "/api/v1/cn/equity/screener",
+    type: "table",
+    gridData: { w: 20, h: 10, minW: 10, minH: 6 },
+    params: [
+      {
+        paramName: "market",
+        value: "SH",
+        label: "Market",
+        type: "text",
+        description: "Market: SH, SZ, or all",
+      },
+      {
+        paramName: "is_realized",
+        value: "false",
+        label: "Realized Only",
+        type: "text",
+        description: "Filter by realized stocks",
+      },
+      {
+        paramName: "strategy_rate",
+        value: "0.2",
+        label: "Strategy Rate",
+        type: "number",
+        description: "Strategy rate threshold",
+      },
+    ],
+    data: {
+      table: {
+        index: "symbol",
+        showAll: false,
+        columnsDefs: [
+          { headerName: "Symbol", field: "symbol", chartDataType: "category" },
+          { headerName: "Name", field: "name", chartDataType: "category" },
+          { headerName: "Price", field: "price", chartDataType: "series" },
+          { headerName: "Change", field: "change", chartDataType: "series" },
+        ],
+      },
     },
-    {
-      uuid: "w-ticker-info",
-      origin: "core",
-      widget_id: "cn.equity.ticker_information",
-      name: "标的信息",
-      description: "展示标的基础信息与价格。",
-      params: [{ name: "symbol", type: "ticker", description: "标的代码", default_value: "600519.SH" }],
+  },
+  "w-ticker-info": {
+    name: "Ticker Information",
+    description: "Display basic information and price for a ticker.",
+    category: "Equity",
+    subCategory: "Info",
+    endpoint: "/api/v1/cn/equity/ticker_information",
+    type: "table",
+    gridData: { w: 12, h: 6, minW: 8, minH: 4 },
+    params: [
+      {
+        paramName: "symbol",
+        value: "600519.SH",
+        label: "Symbol",
+        type: "text",
+        description: "Ticker symbol",
+      },
+    ],
+    data: {
+      table: {
+        index: "symbol",
+        showAll: true,
+        columnsDefs: [
+          { headerName: "Symbol", field: "symbol", chartDataType: "category" },
+          { headerName: "Name", field: "name", chartDataType: "category" },
+          { headerName: "Price", field: "price", chartDataType: "series" },
+          { headerName: "Market Cap", field: "market_cap", chartDataType: "series" },
+        ],
+      },
     },
-    {
-      uuid: "w-key-metrics",
-      origin: "core",
-      widget_id: "portfolio.key_metrics",
-      name: "关键指标",
-      description: "返回标的关键财务与估值指标。",
-      params: [{ name: "symbol", type: "ticker", description: "标的代码", default_value: "600519.SH" }],
+  },
+  "w-key-metrics": {
+    name: "Key Metrics",
+    description: "Return key financial and valuation metrics for a symbol.",
+    category: "Equity",
+    subCategory: "Fundamental",
+    endpoint: "/api/v1/portfolio/key_metrics",
+    type: "table",
+    gridData: { w: 16, h: 8, minW: 10, minH: 6 },
+    params: [
+      {
+        paramName: "symbol",
+        value: "600519.SH",
+        label: "Symbol",
+        type: "text",
+        description: "Ticker symbol",
+      },
+    ],
+    data: {
+      table: {
+        index: "metric",
+        showAll: true,
+        columnsDefs: [
+          { headerName: "Metric", field: "metric", chartDataType: "category" },
+          { headerName: "Value", field: "value", chartDataType: "series" },
+        ],
+      },
     },
-    {
-      uuid: "w-news",
-      origin: "core",
-      widget_id: "portfolio.news",
-      name: "相关新闻",
-      description: "展示与标的相关的新闻列表。",
-      params: [
-        { name: "symbol", type: "ticker", description: "标的代码", default_value: "600519.SH" },
-        { name: "limit", type: "number", description: "返回数量", default_value: 5 },
-      ],
+  },
+  "w-news": {
+    name: "News",
+    description: "Display news related to a symbol.",
+    category: "Equity",
+    subCategory: "News",
+    endpoint: "/api/v1/portfolio/news",
+    type: "table",
+    gridData: { w: 20, h: 8, minW: 10, minH: 6 },
+    params: [
+      {
+        paramName: "symbol",
+        value: "600519.SH",
+        label: "Symbol",
+        type: "text",
+        description: "Ticker symbol",
+      },
+      {
+        paramName: "limit",
+        value: "5",
+        label: "Limit",
+        type: "number",
+        description: "Number of news items",
+      },
+    ],
+    data: {
+      table: {
+        index: "title",
+        showAll: true,
+        columnsDefs: [
+          { headerName: "Title", field: "title", chartDataType: "category" },
+          { headerName: "Date", field: "date", chartDataType: "category" },
+          { headerName: "Source", field: "source", chartDataType: "category" },
+        ],
+      },
     },
-    {
-      uuid: "w-ticker-search",
-      origin: "core",
-      widget_id: "widgets.ticker_search",
-      name: "标的搜索",
-      description: "按关键字搜索标的。",
-      params: [{ name: "query", type: "text", description: "查询关键字", default_value: "" }],
+  },
+  "w-ticker-search": {
+    name: "Ticker Search",
+    description: "Search for symbols by keyword.",
+    category: "Equity",
+    subCategory: "Search",
+    endpoint: "/api/v1/widgets/ticker_search",
+    type: "table",
+    gridData: { w: 16, h: 8, minW: 10, minH: 6 },
+    params: [
+      {
+        paramName: "query",
+        value: "",
+        label: "Query",
+        type: "text",
+        description: "Search keyword",
+      },
+    ],
+    data: {
+      table: {
+        index: "symbol",
+        showAll: true,
+        columnsDefs: [
+          { headerName: "Symbol", field: "symbol", chartDataType: "category" },
+          { headerName: "Name", field: "name", chartDataType: "category" },
+          { headerName: "Exchange", field: "exchange", chartDataType: "category" },
+          { headerName: "Type", field: "type", chartDataType: "category" },
+        ],
+      },
     },
-  ],
+  },
 };
