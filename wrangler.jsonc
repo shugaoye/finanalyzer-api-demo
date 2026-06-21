@@ -8,7 +8,7 @@
 	],
 	"kv_namespaces": [
 		{
-			"binding": "demo_store",
+			"binding": "STORE",
 			"id": "da5d7d1d84564d8b8f356b90d8b7d779"
 		}
 	]
