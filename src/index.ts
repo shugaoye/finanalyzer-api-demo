@@ -202,7 +202,7 @@ export async function handleRoute(url: URL, request: Request): Promise<Response>
           dependencies: {
             store: "ok",
             models: `${stores.models.length} models loaded`,
-            widgets: `${widgetsJson.widgets.length} widgets registered`,
+            widgets: `${Object.keys(widgetsJson).length} widgets registered`,
           },
         })
       : methodNotAllowed();
