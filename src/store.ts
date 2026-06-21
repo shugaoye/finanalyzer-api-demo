@@ -85,6 +85,123 @@ export const stores = {
   ],
 };
 
+// --- Seed mock data at module load ---
+// Cloudflare Workers are stateless, so we seed initial data
+// to ensure every worker instance starts with demo data.
+function seedMockData() {
+  const ts = () => new Date().toISOString();
+
+  // --- Stocks ---
+  const seedStocks: Array<{ symbol: string; name: string; quantity: number; avg_price: number; currency: string; sector: string; industry: string; market: string }> = [
+    { symbol: "600519.SH", name: "贵州茅台", quantity: 100, avg_price: 1680.5, currency: "CNY", sector: "消费", industry: "白酒", market: "SH" },
+    { symbol: "000858.SZ", name: "五粮液", quantity: 500, avg_price: 168.2, currency: "CNY", sector: "消费", industry: "白酒", market: "SZ" },
+    { symbol: "601318.SH", name: "中国平安", quantity: 1000, avg_price: 45.8, currency: "CNY", sector: "金融", industry: "保险", market: "SH" },
+    { symbol: "300750.SZ", name: "宁德时代", quantity: 200, avg_price: 215.6, currency: "CNY", sector: "能源", industry: "电池", market: "SZ" },
+    { symbol: "AAPL.US", name: "Apple Inc.", quantity: 50, avg_price: 198.5, currency: "USD", sector: "科技", industry: "消费电子", market: "US" },
+    { symbol: "MSFT.US", name: "Microsoft", quantity: 30, avg_price: 420.0, currency: "USD", sector: "科技", industry: "软件", market: "US" },
+  ];
+  seedStocks.forEach((s) => {
+    stores.stocks.set(s.symbol, { ...s, created_at: ts(), updated_at: ts() });
+  });
+
+  // --- Transactions ---
+  const seedTransactions: Array<{ id: string; symbol: string; type: "buy" | "sell"; quantity: number; price: number; date: string; notes: string | null }> = [
+    { id: "tx-001", symbol: "600519.SH", type: "buy", quantity: 100, price: 1680.5, date: "2026-01-15T00:00:00.000Z", notes: "Initial position" },
+    { id: "tx-002", symbol: "000858.SZ", type: "buy", quantity: 500, price: 168.2, date: "2026-01-20T00:00:00.000Z", notes: null },
+    { id: "tx-003", symbol: "601318.SH", type: "buy", quantity: 1000, price: 45.8, date: "2026-02-01T00:00:00.000Z", notes: null },
+    { id: "tx-004", symbol: "300750.SZ", type: "buy", quantity: 200, price: 215.6, date: "2026-02-10T00:00:00.000Z", notes: null },
+    { id: "tx-005", symbol: "AAPL.US", type: "buy", quantity: 50, price: 198.5, date: "2026-03-01T00:00:00.000Z", notes: "Tech allocation" },
+    { id: "tx-006", symbol: "MSFT.US", type: "buy", quantity: 30, price: 420.0, date: "2026-03-05T00:00:00.000Z", notes: null },
+  ];
+  seedTransactions.forEach((t) => {
+    const total = Number((t.quantity * t.price).toFixed(4));
+    stores.transactions.set(t.id, { ...t, total, created_at: ts(), updated_at: ts() });
+  });
+
+  // --- Dashboards ---
+  const seedDashboards: Array<{
+    id: string;
+    name: string;
+    description: string;
+    widgets: WidgetBase[];
+    tabs: TabBase[];
+    groups: Array<{ [key: string]: any }>;
+  }> = [
+    {
+      id: "dash-overview",
+      name: "投资概览",
+      description: "综合展示投资组合的整体情况与关键指标。",
+      widgets: [
+        { id: "w1-overview", type: "metric", title: "组合总市值", position: { x: 0, y: 0, w: 4, h: 3 }, data: { value: 528450, currency: "CNY" } },
+        { id: "w2-overview", type: "metric", title: "总盈亏", position: { x: 4, y: 0, w: 4, h: 3 }, data: { value: 18520, pct: 3.62 } },
+        { id: "w3-overview", type: "metric", title: "持仓数量", position: { x: 8, y: 0, w: 4, h: 3 }, data: { value: 6 } },
+        { id: "w4-overview", type: "table", title: "持仓明细", position: { x: 0, y: 3, w: 12, h: 6 }, data: { symbol: "600519.SH" } },
+      ],
+      tabs: [
+        { id: "tab-overview", name: "概览", icon: "layout" },
+      ],
+      groups: [],
+    },
+    {
+      id: "dash-cn-market",
+      name: "A股市场",
+      description: "A股市场行情、标的筛选与价格走势。",
+      widgets: [
+        { id: "w1-price", type: "chart", title: "历史价格走势", position: { x: 0, y: 0, w: 12, h: 5 }, data: { symbol: "600519.SH", interval: "1d" } },
+        { id: "w2-screener", type: "table", title: "市场筛选", position: { x: 0, y: 5, w: 12, h: 6 }, data: { market: "SH" } },
+      ],
+      tabs: [
+        { id: "tab-price", name: "价格", icon: "trending-up" },
+        { id: "tab-screener", name: "筛选", icon: "filter" },
+      ],
+      groups: [],
+    },
+    {
+      id: "dash-analysis",
+      name: "分析仪表盘",
+      description: "标的关键指标、新闻与基本面分析。",
+      widgets: [
+        { id: "w1-metrics", type: "table", title: "关键财务指标", position: { x: 0, y: 0, w: 6, h: 6 }, data: { symbol: "600519.SH" } },
+        { id: "w2-news", type: "table", title: "相关新闻", position: { x: 6, y: 0, w: 6, h: 6 }, data: { symbol: "600519.SH", limit: 5 } },
+      ],
+      tabs: [
+        { id: "tab-analysis", name: "分析", icon: "bar-chart" },
+      ],
+      groups: [],
+    },
+    {
+      id: "dash-portfolio",
+      name: "组合管理",
+      description: "管理投资组合的持仓、交易记录与分析。",
+      widgets: [
+        { id: "w1-holdings", type: "table", title: "持仓概览", position: { x: 0, y: 0, w: 12, h: 5 }, data: {} },
+        { id: "w2-tx", type: "table", title: "最近交易", position: { x: 0, y: 5, w: 12, h: 6 }, data: {} },
+      ],
+      tabs: [
+        { id: "tab-portfolio", name: "组合", icon: "wallet" },
+      ],
+      groups: [],
+    },
+  ];
+  seedDashboards.forEach((d) => {
+    const widgetMap = new Map<string, WidgetBase>();
+    (d.widgets ?? []).forEach((w) => widgetMap.set(w.id, w));
+    const response: DashboardResponse = {
+      id: d.id,
+      name: d.name,
+      description: d.description,
+      widgets: d.widgets,
+      tabs: d.tabs,
+      groups: d.groups,
+      created_at: ts(),
+      updated_at: ts(),
+    };
+    stores.dashboards.set(d.id, { response, widgetMap });
+  });
+}
+
+seedMockData();
+
 function withTimestamps<T extends object>(obj: T): T & { created_at: string; updated_at: string } {
   const ts = nowISO();
   return { ...obj, created_at: ts, updated_at: ts };
