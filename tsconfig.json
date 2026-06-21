@@ -5,7 +5,7 @@
     "moduleResolution": "Bundler",
     "strict": true,
     "lib": ["ES2022"],
-    "types": ["@cloudflare/workers-types"],
+    "types": [],
     "jsx": "react-jsx",
     "esModuleInterop": true,
     "skipLibCheck": true,
@@ -15,5 +15,5 @@
     "allowSyntheticDefaultImports": true,
     "forceConsistentCasingInFileNames": true
   },
-  "include": ["src/**/*.ts", "tests/**/*.ts"]
+  "include": ["src/**/*.ts", "tests/**/*.ts", "worker-configuration.d.ts"]
 }

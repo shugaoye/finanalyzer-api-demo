@@ -86,27 +86,75 @@ async function seedMockData(kv: KVNamespace): Promise<void> {
 
   const ts = nowISO();
 
-  // --- Stocks ---
+  // --- Stocks with full data matching widget specifications ---
   const seedStocks = [
-    { symbol: "600519.SH", name: "贵州茅台", quantity: 100, avg_price: 1680.5, currency: "CNY", sector: "消费", industry: "白酒", market: "SH" },
-    { symbol: "000858.SZ", name: "五粮液", quantity: 500, avg_price: 168.2, currency: "CNY", sector: "消费", industry: "白酒", market: "SZ" },
-    { symbol: "601318.SH", name: "中国平安", quantity: 1000, avg_price: 45.8, currency: "CNY", sector: "金融", industry: "保险", market: "SH" },
-    { symbol: "300750.SZ", name: "宁德时代", quantity: 200, avg_price: 215.6, currency: "CNY", sector: "能源", industry: "电池", market: "SZ" },
-    { symbol: "AAPL.US", name: "Apple Inc.", quantity: 50, avg_price: 198.5, currency: "USD", sector: "科技", industry: "消费电子", market: "US" },
-    { symbol: "MSFT.US", name: "Microsoft", quantity: 30, avg_price: 420.0, currency: "USD", sector: "科技", industry: "软件", market: "US" },
+    {
+      symbol: "600519.SH", name: "贵州茅台", quantity: 100, avg_price: 1680.5, avg_cost: 1650.0, currency: "CNY", sector: "消费", industry: "白酒", market: "SH",
+      current_price: 1720.50, total_value: 172050, fifty_two_week_low: 1550.00, fifty_two_week_high: 1850.00,
+      dividend_yield: 2.50, latest_dividend: 21.65, strategy: "持有", tradingview: "https://www.tradingview.com/chart/?symbol=600519.SH"
+    },
+    {
+      symbol: "000858.SZ", name: "五粮液", quantity: 500, avg_price: 168.2, avg_cost: 165.0, currency: "CNY", sector: "消费", industry: "白酒", market: "SZ",
+      current_price: 172.80, total_value: 86400, fifty_two_week_low: 148.00, fifty_two_week_high: 195.00,
+      dividend_yield: 2.80, latest_dividend: 3.20, strategy: "买入", tradingview: "https://www.tradingview.com/chart/?symbol=000858.SZ"
+    },
+    {
+      symbol: "601318.SH", name: "中国平安", quantity: 1000, avg_price: 45.8, avg_cost: 44.5, currency: "CNY", sector: "金融", industry: "保险", market: "SH",
+      current_price: 48.20, total_value: 48200, fifty_two_week_low: 40.00, fifty_two_week_high: 55.00,
+      dividend_yield: 4.20, latest_dividend: 1.80, strategy: "持有", tradingview: "https://www.tradingview.com/chart/?symbol=601318.SH"
+    },
+    {
+      symbol: "300750.SZ", name: "宁德时代", quantity: 200, avg_price: 215.6, avg_cost: 210.0, currency: "CNY", sector: "能源", industry: "电池", market: "SZ",
+      current_price: 228.50, total_value: 45700, fifty_two_week_low: 185.00, fifty_two_week_high: 260.00,
+      dividend_yield: 1.20, latest_dividend: 1.56, strategy: "持有", tradingview: "https://www.tradingview.com/chart/?symbol=300750.SZ"
+    },
+    {
+      symbol: "AAPL.US", name: "Apple Inc.", quantity: 50, avg_price: 198.5, avg_cost: 195.0, currency: "USD", sector: "科技", industry: "消费电子", market: "US",
+      current_price: 215.30, total_value: 10765, fifty_two_week_low: 178.00, fifty_two_week_high: 235.00,
+      dividend_yield: 0.50, latest_dividend: 0.24, strategy: "买入", tradingview: "https://www.tradingview.com/chart/?symbol=AAPL.US"
+    },
+    {
+      symbol: "MSFT.US", name: "Microsoft", quantity: 30, avg_price: 420.0, avg_cost: 410.0, currency: "USD", sector: "科技", industry: "软件", market: "US",
+      current_price: 445.80, total_value: 13374, fifty_two_week_low: 375.00, fifty_two_week_high: 460.00,
+      dividend_yield: 0.80, latest_dividend: 0.75, strategy: "持有", tradingview: "https://www.tradingview.com/chart/?symbol=MSFT.US"
+    },
+    {
+      symbol: "600325.SH", name: "华发股份", quantity: 2000, avg_price: 8.5, avg_cost: 8.2, currency: "CNY", sector: "地产", industry: "房地产开发", market: "SH",
+      current_price: 9.15, total_value: 18300, fifty_two_week_low: 6.80, fifty_two_week_high: 11.50,
+      dividend_yield: 5.80, latest_dividend: 0.48, strategy: "卖出", tradingview: "https://www.tradingview.com/chart/?symbol=600325.SH"
+    },
+    {
+      symbol: "000333.SZ", name: "美的集团", quantity: 800, avg_price: 55.2, avg_cost: 53.8, currency: "CNY", sector: "消费", industry: "家电", market: "SZ",
+      current_price: 58.60, total_value: 46880, fifty_two_week_low: 48.00, fifty_two_week_high: 68.00,
+      dividend_yield: 3.80, latest_dividend: 1.80, strategy: "持有", tradingview: "https://www.tradingview.com/chart/?symbol=000333.SZ"
+    },
   ];
   for (const s of seedStocks) {
     await kvSet(kv, KEYS.STOCKS + s.symbol, { ...s, created_at: ts, updated_at: ts });
   }
 
-  // --- Transactions ---
+  // --- Transactions with full data matching widget specifications ---
   const seedTransactions = [
-    { id: "tx-001", symbol: "600519.SH", type: "buy", quantity: 100, price: 1680.5, date: "2026-01-15T00:00:00.000Z", notes: "Initial position", total: 168050 },
-    { id: "tx-002", symbol: "000858.SZ", type: "buy", quantity: 500, price: 168.2, date: "2026-01-20T00:00:00.000Z", notes: null, total: 84100 },
-    { id: "tx-003", symbol: "601318.SH", type: "buy", quantity: 1000, price: 45.8, date: "2026-02-01T00:00:00.000Z", notes: null, total: 45800 },
-    { id: "tx-004", symbol: "300750.SZ", type: "buy", quantity: 200, price: 215.6, date: "2026-02-10T00:00:00.000Z", notes: null, total: 43120 },
-    { id: "tx-005", symbol: "AAPL.US", type: "buy", quantity: 50, price: 198.5, date: "2026-03-01T00:00:00.000Z", notes: "Tech allocation", total: 9925 },
-    { id: "tx-006", symbol: "MSFT.US", type: "buy", quantity: 30, price: 420.0, date: "2026-03-05T00:00:00.000Z", notes: null, total: 12600 },
+    { id: "tx-001", symbol: "600519.SH", name: "贵州茅台", type: "买入", transaction_type: "买入", quantity: 100, price: 1680.5, 
+      date: "2026-01-15T09:30:00.000Z", notes: "Initial position", total: 168050, total_value: 168218.05, base_value: 168050, transaction_fee: 168.05 },
+    { id: "tx-002", symbol: "000858.SZ", name: "五粮液", type: "买入", transaction_type: "买入", quantity: 500, price: 168.2, 
+      date: "2026-01-20T10:15:00.000Z", notes: null, total: 84100, total_value: 84184.10, base_value: 84100, transaction_fee: 84.10 },
+    { id: "tx-003", symbol: "601318.SH", name: "中国平安", type: "买入", transaction_type: "买入", quantity: 1000, price: 45.8, 
+      date: "2026-02-01T14:00:00.000Z", notes: null, total: 45800, total_value: 45845.80, base_value: 45800, transaction_fee: 45.80 },
+    { id: "tx-004", symbol: "300750.SZ", name: "宁德时代", type: "买入", transaction_type: "买入", quantity: 200, price: 215.6, 
+      date: "2026-02-10T11:30:00.000Z", notes: null, total: 43120, total_value: 43163.12, base_value: 43120, transaction_fee: 43.12 },
+    { id: "tx-005", symbol: "AAPL.US", name: "Apple Inc.", type: "买入", transaction_type: "买入", quantity: 50, price: 198.5, 
+      date: "2026-03-01T09:45:00.000Z", notes: "Tech allocation", total: 9925, total_value: 9934.93, base_value: 9925, transaction_fee: 9.93 },
+    { id: "tx-006", symbol: "MSFT.US", name: "Microsoft", type: "买入", transaction_type: "买入", quantity: 30, price: 420.0, 
+      date: "2026-03-05T10:00:00.000Z", notes: null, total: 12600, total_value: 12612.60, base_value: 12600, transaction_fee: 12.60 },
+    { id: "tx-007", symbol: "600325.SH", name: "华发股份", type: "买入", transaction_type: "买入", quantity: 2000, price: 8.5, 
+      date: "2026-03-15T13:30:00.000Z", notes: "Dividend play", total: 17000, total_value: 17017.00, base_value: 17000, transaction_fee: 17.00 },
+    { id: "tx-008", symbol: "000333.SZ", name: "美的集团", type: "买入", transaction_type: "买入", quantity: 800, price: 55.2, 
+      date: "2026-03-20T14:45:00.000Z", notes: "Value investment", total: 44160, total_value: 44204.16, base_value: 44160, transaction_fee: 44.16 },
+    { id: "tx-009", symbol: "000858.SZ", name: "五粮液", type: "卖出", transaction_type: "卖出", quantity: 200, price: 175.5, 
+      date: "2026-04-01T10:20:00.000Z", notes: "Partial profit taking", total: 35100, total_value: 35064.90, base_value: 35100, transaction_fee: 35.10 },
+    { id: "tx-010", symbol: "601318.SH", name: "中国平安", type: "买入", transaction_type: "买入", quantity: 500, price: 46.2, 
+      date: "2026-04-10T11:00:00.000Z", notes: "Average down", total: 23100, total_value: 23123.10, base_value: 23100, transaction_fee: 23.10 },
   ];
   for (const t of seedTransactions) {
     await kvSet(kv, KEYS.TRANSACTIONS + t.id, { ...t, created_at: ts, updated_at: ts });
@@ -212,10 +260,13 @@ export async function createStock(kv: KVNamespace, input: StockCreate): Promise<
       name: input.name ?? null,
       quantity: input.quantity ?? 0,
       avg_price: input.avg_price ?? 0,
+      avg_cost: input.avg_cost ?? (input.avg_price ?? 0),
       currency: input.currency ?? "CNY",
       sector: input.sector ?? null,
       industry: input.industry ?? null,
       market: input.market ?? null,
+      current_price: input.current_price ?? (input.avg_price ?? 0),
+      total_value: input.current_price ? (input.current_price * (input.quantity ?? 1)) : null,
       created_at: ts,
       updated_at: ts,
     };
@@ -263,16 +314,25 @@ export async function getTransaction(kv: KVNamespace, id: string): Promise<Trans
 
 export async function createTransaction(kv: KVNamespace, input: TransactionCreate): Promise<TransactionResponse> {
   const id = uuid();
-  const total = Number((Number(input.quantity) * Number(input.price)).toFixed(4));
+  const baseValue = Number((Number(input.quantity) * Number(input.price)).toFixed(4));
+  const feeRate = 0.001;
+  const transactionFee = Number((baseValue * feeRate).toFixed(4));
+  const totalValue = Number((baseValue + transactionFee).toFixed(4));
+  
   const record: TransactionResponse = {
     id,
     symbol: input.symbol,
+    name: input.name ?? null,
     type: input.type,
+    transaction_type: input.transaction_type ?? input.type,
     quantity: input.quantity,
     price: input.price,
     date: input.date ?? nowISO(),
     notes: input.notes ?? null,
-    total,
+    total: baseValue,
+    total_value: input.total_value ?? totalValue,
+    base_value: input.base_value ?? baseValue,
+    transaction_fee: input.transaction_fee ?? transactionFee,
     created_at: nowISO(),
     updated_at: nowISO(),
   };
@@ -289,11 +349,26 @@ export async function updateTransaction(
   if (!cur) return undefined;
   const next = { ...cur, ...patch } as TransactionResponse;
   if (patch.quantity != null && patch.price != null) {
-    next.total = Number((Number(patch.quantity) * Number(patch.price)).toFixed(4));
+    const baseValue = Number((Number(patch.quantity) * Number(patch.price)).toFixed(4));
+    next.base_value = baseValue;
+    next.total = baseValue;
+    next.transaction_fee = Number((baseValue * 0.001).toFixed(4));
+    next.total_value = Number((baseValue + (baseValue * 0.001)).toFixed(4));
   } else if (patch.quantity != null) {
-    next.total = Number((Number(patch.quantity) * Number(cur.price)).toFixed(4));
+    const baseValue = Number((Number(patch.quantity) * Number(cur.price)).toFixed(4));
+    next.base_value = baseValue;
+    next.total = baseValue;
+    next.transaction_fee = Number((baseValue * 0.001).toFixed(4));
+    next.total_value = Number((baseValue + (baseValue * 0.001)).toFixed(4));
   } else if (patch.price != null) {
-    next.total = Number((Number(cur.quantity) * Number(patch.price)).toFixed(4));
+    const baseValue = Number((Number(cur.quantity) * Number(patch.price)).toFixed(4));
+    next.base_value = baseValue;
+    next.total = baseValue;
+    next.transaction_fee = Number((baseValue * 0.001).toFixed(4));
+    next.total_value = Number((baseValue + (baseValue * 0.001)).toFixed(4));
+  }
+  if (patch.transaction_type != null) {
+    next.type = patch.transaction_type;
   }
   const updated = { ...next, updated_at: nowISO() };
   await kvSet(kv, KEYS.TRANSACTIONS + id, updated);

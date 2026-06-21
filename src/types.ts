@@ -11,12 +11,21 @@ export interface StockResponse {
   name?: string | null;
   quantity?: number | null;
   avg_price?: number | null;
+  avg_cost?: number | null;
   currency?: string | null;
   sector?: string | null;
   industry?: string | null;
   market?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
+  current_price?: number | null;
+  total_value?: number | null;
+  fifty_two_week_low?: number | null;
+  fifty_two_week_high?: number | null;
+  dividend_yield?: number | null;
+  latest_dividend?: number | null;
+  strategy?: string | null;
+  tradingview?: string | null;
   [key: string]: JsonValue | undefined;
 }
 
@@ -25,10 +34,12 @@ export interface StockCreate {
   name?: string | null;
   quantity?: number | null;
   avg_price?: number | null;
+  avg_cost?: number | null;
   currency?: string | null;
   sector?: string | null;
   industry?: string | null;
   market?: string | null;
+  current_price?: number | null;
   [key: string]: JsonValue | undefined;
 }
 
@@ -36,6 +47,7 @@ export interface StockUpdate {
   name?: string | null;
   quantity?: number | null;
   avg_price?: number | null;
+  avg_cost?: number | null;
   currency?: string | null;
   sector?: string | null;
   industry?: string | null;
@@ -56,12 +68,17 @@ export interface StockDeleteResponse {
 export interface TransactionResponse {
   id: string;
   symbol: string;
+  name?: string | null;
   type: "buy" | "sell" | string;
+  transaction_type?: string | null;
   quantity: number;
   price: number;
   date?: string | null;
   notes?: string | null;
   total?: number | null;
+  total_value?: number | null;
+  base_value?: number | null;
+  transaction_fee?: number | null;
   created_at?: string | null;
   updated_at?: string | null;
   [key: string]: JsonValue | undefined;
@@ -69,17 +86,24 @@ export interface TransactionResponse {
 
 export interface TransactionCreate {
   symbol: string;
+  name?: string | null;
   type: "buy" | "sell" | string;
+  transaction_type?: string | null;
   quantity: number;
   price: number;
   date?: string | null;
   notes?: string | null;
+  total_value?: number | null;
+  base_value?: number | null;
+  transaction_fee?: number | null;
   [key: string]: JsonValue | undefined;
 }
 
 export interface TransactionUpdate {
   symbol?: string | null;
+  name?: string | null;
   type?: string | null;
+  transaction_type?: string | null;
   quantity?: number | null;
   price?: number | null;
   date?: string | null;
