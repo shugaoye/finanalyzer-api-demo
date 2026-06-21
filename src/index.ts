@@ -189,9 +189,9 @@ export async function handleRoute(url: URL, request: Request): Promise<Response>
   }
 
   // ---- Static config ----
-  if (path === "/api/apps.json") return method === "GET" ? json(appsJson) : methodNotAllowed();
-  if (path === "/api/agents.json") return method === "GET" ? json(agentsJson) : methodNotAllowed();
-  if (path === "/api/widgets.json") return method === "GET" ? json(widgetsJson) : methodNotAllowed();
+  if (path === "/api/apps.json" || path === "/apps.json") return method === "GET" ? json(appsJson) : methodNotAllowed();
+  if (path === "/api/agents.json" || path === "/agents.json") return method === "GET" ? json(agentsJson) : methodNotAllowed();
+  if (path === "/api/widgets.json" || path === "/widgets.json") return method === "GET" ? json(widgetsJson) : methodNotAllowed();
 
   // ---- /api/v1/health ----
   if (path === "/api/v1/health")
