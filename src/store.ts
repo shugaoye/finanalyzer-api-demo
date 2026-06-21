@@ -15,6 +15,10 @@ import type {
   TabBase,
 } from "./types";
 
+export interface Env {
+  STORE: KVNamespace;
+}
+
 const nowISO = () => new Date().toISOString();
 const uuid = () =>
   "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
@@ -23,60 +27,17 @@ const uuid = () =>
     return v.toString(16);
   });
 
-class Store<T extends { id?: string; created_at?: string | null; updated_at?: string | null }> {
-  private items: Map<string, T> = new Map();
-  private idKey: keyof T;
-
-  constructor(idKey: keyof T = "id" as keyof T) {
-    this.idKey = idKey;
-  }
-
-  all(): T[] {
-    return Array.from(this.items.values());
-  }
-
-  get(id: string): T | undefined {
-    return this.items.get(id);
-  }
-
-  has(id: string): boolean {
-    return this.items.has(id);
-  }
-
-  set(id: string, value: T): void {
-    this.items.set(id, value);
-  }
-
-  insert(value: T): T {
-    const id = (value[this.idKey as keyof T] as string) || uuid();
-    const ts = nowISO();
-    const v = { ...(value as any), id, created_at: ts, updated_at: ts } as T;
-    this.items.set(id, v);
-    return v;
-  }
-
-  update(id: string, patch: Partial<T>): T | undefined {
-    const cur = this.items.get(id);
-    if (!cur) return undefined;
-    const updated = { ...(cur as any), ...(patch as any), id, updated_at: nowISO() } as T;
-    this.items.set(id, updated);
-    return updated;
-  }
-
-  delete(id: string): boolean {
-    return this.items.delete(id);
-  }
-
-  clear(): void {
-    this.items.clear();
-  }
-}
+// Key prefixes for KV
+const KEYS = {
+  STOCKS: "stocks:",
+  TRANSACTIONS: "transactions:",
+  DASHBOARDS: "dashboards:",
+  SESSIONS: "sessions:",
+  MODELS: "models",
+  SEEDED: "seeded",
+};
 
 export const stores = {
-  stocks: new Map<string, StockResponse>(),
-  transactions: new Map<string, TransactionResponse>(),
-  dashboards: new Map<string, { response: DashboardResponse; widgetMap: Map<string, WidgetBase> }>(),
-  sessions: new Map<string, { id: string; title: string; created_at: string; updated_at: string }>(),
   models: [
     { id: "claude-sonnet-4", name: "Claude Sonnet 4", provider: "anthropic", description: "Default model for query processing." },
     { id: "gpt-4o", name: "GPT-4o", provider: "openai", description: "OpenAI latest flagship model." },
@@ -85,14 +46,48 @@ export const stores = {
   ],
 };
 
-// --- Seed mock data at module load ---
-// Cloudflare Workers are stateless, so we seed initial data
-// to ensure every worker instance starts with demo data.
-function seedMockData() {
-  const ts = () => new Date().toISOString();
+// ---- KV helpers ----
+async function kvGet<T>(kv: KVNamespace, key: string): Promise<T | undefined> {
+  const value = await kv.get(key);
+  if (!value) return undefined;
+  try {
+    return JSON.parse(value) as T;
+  } catch {
+    return undefined;
+  }
+}
+
+async function kvSet<T>(kv: KVNamespace, key: string, value: T): Promise<void> {
+  await kv.put(key, JSON.stringify(value));
+}
+
+async function kvDelete(kv: KVNamespace, key: string): Promise<void> {
+  await kv.delete(key);
+}
+
+async function kvListKeys(kv: KVNamespace, prefix: string): Promise<string[]> {
+  const keys: string[] = [];
+  let cursor: string | undefined;
+  do {
+    const result = await kv.list({ prefix, cursor });
+    keys.push(...result.keys.map((k) => k.name));
+    if (result.list_complete) {
+      break;
+    }
+    cursor = result.cursor;
+  } while (cursor);
+  return keys;
+}
+
+// ---- Seed mock data at module load ----
+async function seedMockData(kv: KVNamespace): Promise<void> {
+  const seeded = await kv.get(KEYS.SEEDED);
+  if (seeded === "true") return;
+
+  const ts = nowISO();
 
   // --- Stocks ---
-  const seedStocks: Array<{ symbol: string; name: string; quantity: number; avg_price: number; currency: string; sector: string; industry: string; market: string }> = [
+  const seedStocks = [
     { symbol: "600519.SH", name: "贵州茅台", quantity: 100, avg_price: 1680.5, currency: "CNY", sector: "消费", industry: "白酒", market: "SH" },
     { symbol: "000858.SZ", name: "五粮液", quantity: 500, avg_price: 168.2, currency: "CNY", sector: "消费", industry: "白酒", market: "SZ" },
     { symbol: "601318.SH", name: "中国平安", quantity: 1000, avg_price: 45.8, currency: "CNY", sector: "金融", industry: "保险", market: "SH" },
@@ -100,33 +95,25 @@ function seedMockData() {
     { symbol: "AAPL.US", name: "Apple Inc.", quantity: 50, avg_price: 198.5, currency: "USD", sector: "科技", industry: "消费电子", market: "US" },
     { symbol: "MSFT.US", name: "Microsoft", quantity: 30, avg_price: 420.0, currency: "USD", sector: "科技", industry: "软件", market: "US" },
   ];
-  seedStocks.forEach((s) => {
-    stores.stocks.set(s.symbol, { ...s, created_at: ts(), updated_at: ts() });
-  });
+  for (const s of seedStocks) {
+    await kvSet(kv, KEYS.STOCKS + s.symbol, { ...s, created_at: ts, updated_at: ts });
+  }
 
   // --- Transactions ---
-  const seedTransactions: Array<{ id: string; symbol: string; type: "buy" | "sell"; quantity: number; price: number; date: string; notes: string | null }> = [
-    { id: "tx-001", symbol: "600519.SH", type: "buy", quantity: 100, price: 1680.5, date: "2026-01-15T00:00:00.000Z", notes: "Initial position" },
-    { id: "tx-002", symbol: "000858.SZ", type: "buy", quantity: 500, price: 168.2, date: "2026-01-20T00:00:00.000Z", notes: null },
-    { id: "tx-003", symbol: "601318.SH", type: "buy", quantity: 1000, price: 45.8, date: "2026-02-01T00:00:00.000Z", notes: null },
-    { id: "tx-004", symbol: "300750.SZ", type: "buy", quantity: 200, price: 215.6, date: "2026-02-10T00:00:00.000Z", notes: null },
-    { id: "tx-005", symbol: "AAPL.US", type: "buy", quantity: 50, price: 198.5, date: "2026-03-01T00:00:00.000Z", notes: "Tech allocation" },
-    { id: "tx-006", symbol: "MSFT.US", type: "buy", quantity: 30, price: 420.0, date: "2026-03-05T00:00:00.000Z", notes: null },
+  const seedTransactions = [
+    { id: "tx-001", symbol: "600519.SH", type: "buy", quantity: 100, price: 1680.5, date: "2026-01-15T00:00:00.000Z", notes: "Initial position", total: 168050 },
+    { id: "tx-002", symbol: "000858.SZ", type: "buy", quantity: 500, price: 168.2, date: "2026-01-20T00:00:00.000Z", notes: null, total: 84100 },
+    { id: "tx-003", symbol: "601318.SH", type: "buy", quantity: 1000, price: 45.8, date: "2026-02-01T00:00:00.000Z", notes: null, total: 45800 },
+    { id: "tx-004", symbol: "300750.SZ", type: "buy", quantity: 200, price: 215.6, date: "2026-02-10T00:00:00.000Z", notes: null, total: 43120 },
+    { id: "tx-005", symbol: "AAPL.US", type: "buy", quantity: 50, price: 198.5, date: "2026-03-01T00:00:00.000Z", notes: "Tech allocation", total: 9925 },
+    { id: "tx-006", symbol: "MSFT.US", type: "buy", quantity: 30, price: 420.0, date: "2026-03-05T00:00:00.000Z", notes: null, total: 12600 },
   ];
-  seedTransactions.forEach((t) => {
-    const total = Number((t.quantity * t.price).toFixed(4));
-    stores.transactions.set(t.id, { ...t, total, created_at: ts(), updated_at: ts() });
-  });
+  for (const t of seedTransactions) {
+    await kvSet(kv, KEYS.TRANSACTIONS + t.id, { ...t, created_at: ts, updated_at: ts });
+  }
 
   // --- Dashboards ---
-  const seedDashboards: Array<{
-    id: string;
-    name: string;
-    description: string;
-    widgets: WidgetBase[];
-    tabs: TabBase[];
-    groups: Array<{ [key: string]: any }>;
-  }> = [
+  const seedDashboards = [
     {
       id: "dash-overview",
       name: "投资概览",
@@ -137,9 +124,7 @@ function seedMockData() {
         { id: "w3-overview", type: "metric", title: "持仓数量", position: { x: 8, y: 0, w: 4, h: 3 }, data: { value: 6 } },
         { id: "w4-overview", type: "table", title: "持仓明细", position: { x: 0, y: 3, w: 12, h: 6 }, data: { symbol: "600519.SH" } },
       ],
-      tabs: [
-        { id: "tab-overview", name: "概览", icon: "layout" },
-      ],
+      tabs: [{ id: "tab-overview", name: "概览", icon: "layout" }],
       groups: [],
     },
     {
@@ -164,9 +149,7 @@ function seedMockData() {
         { id: "w1-metrics", type: "table", title: "关键财务指标", position: { x: 0, y: 0, w: 6, h: 6 }, data: { symbol: "600519.SH" } },
         { id: "w2-news", type: "table", title: "相关新闻", position: { x: 6, y: 0, w: 6, h: 6 }, data: { symbol: "600519.SH", limit: 5 } },
       ],
-      tabs: [
-        { id: "tab-analysis", name: "分析", icon: "bar-chart" },
-      ],
+      tabs: [{ id: "tab-analysis", name: "分析", icon: "bar-chart" }],
       groups: [],
     },
     {
@@ -177,85 +160,96 @@ function seedMockData() {
         { id: "w1-holdings", type: "table", title: "持仓概览", position: { x: 0, y: 0, w: 12, h: 5 }, data: {} },
         { id: "w2-tx", type: "table", title: "最近交易", position: { x: 0, y: 5, w: 12, h: 6 }, data: {} },
       ],
-      tabs: [
-        { id: "tab-portfolio", name: "组合", icon: "wallet" },
-      ],
+      tabs: [{ id: "tab-portfolio", name: "组合", icon: "wallet" }],
       groups: [],
     },
   ];
-  seedDashboards.forEach((d) => {
-    const widgetMap = new Map<string, WidgetBase>();
-    (d.widgets ?? []).forEach((w) => widgetMap.set(w.id, w));
-    const response: DashboardResponse = {
+  for (const d of seedDashboards) {
+    await kvSet(kv, KEYS.DASHBOARDS + d.id, {
       id: d.id,
       name: d.name,
       description: d.description,
       widgets: d.widgets,
       tabs: d.tabs,
       groups: d.groups,
-      created_at: ts(),
-      updated_at: ts(),
-    };
-    stores.dashboards.set(d.id, { response, widgetMap });
-  });
+      created_at: ts,
+      updated_at: ts,
+    });
+  }
+
+  await kv.put(KEYS.SEEDED, "true");
 }
 
-seedMockData();
-
-function withTimestamps<T extends object>(obj: T): T & { created_at: string; updated_at: string } {
-  const ts = nowISO();
-  return { ...obj, created_at: ts, updated_at: ts };
-}
-
-function updateTimestamps<T extends { updated_at?: string | null }>(obj: T): T {
-  return { ...obj, updated_at: nowISO() };
+// Initialize KV store - call once per worker instance
+export async function initStore(kv: KVNamespace): Promise<void> {
+  await seedMockData(kv);
 }
 
 // ---- Stocks ----
-export function listStocks(): StockResponse[] {
-  return Array.from(stores.stocks.values());
-}
-
-export function getStock(symbol: string): StockResponse | undefined {
-  return stores.stocks.get(symbol);
-}
-
-export function createStock(input: StockCreate): StockResponse {
-  const existing = stores.stocks.get(input.symbol);
-  if (existing) {
-    const updated = updateTimestamps({ ...existing, ...input });
-    stores.stocks.set(input.symbol, updated);
-    return updated;
+export async function listStocks(kv: KVNamespace): Promise<StockResponse[]> {
+  const keys = await kvListKeys(kv, KEYS.STOCKS);
+  const stocks: StockResponse[] = [];
+  for (const key of keys) {
+    const stock = await kvGet<StockResponse>(kv, key);
+    if (stock) stocks.push(stock);
   }
-  const record = withTimestamps({
-    symbol: input.symbol,
-    name: input.name ?? null,
-    quantity: input.quantity ?? 0,
-    avg_price: input.avg_price ?? 0,
-    currency: input.currency ?? "CNY",
-    sector: input.sector ?? null,
-    industry: input.industry ?? null,
-    market: input.market ?? null,
-  }) as StockResponse;
-  stores.stocks.set(input.symbol, record);
+  return stocks;
+}
+
+export async function getStock(kv: KVNamespace, symbol: string): Promise<StockResponse | undefined> {
+  return kvGet<StockResponse>(kv, KEYS.STOCKS + symbol);
+}
+
+export async function createStock(kv: KVNamespace, input: StockCreate): Promise<StockResponse> {
+  const existing = await getStock(kv, input.symbol);
+  const ts = nowISO();
+  let record: StockResponse;
+  if (existing) {
+    record = { ...existing, ...input, updated_at: ts } as StockResponse;
+  } else {
+    record = {
+      symbol: input.symbol,
+      name: input.name ?? null,
+      quantity: input.quantity ?? 0,
+      avg_price: input.avg_price ?? 0,
+      currency: input.currency ?? "CNY",
+      sector: input.sector ?? null,
+      industry: input.industry ?? null,
+      market: input.market ?? null,
+      created_at: ts,
+      updated_at: ts,
+    };
+  }
+  await kvSet(kv, KEYS.STOCKS + input.symbol, record);
   return record;
 }
 
-export function updateStock(symbol: string, patch: StockUpdate): StockResponse | undefined {
-  const cur = stores.stocks.get(symbol);
+export async function updateStock(kv: KVNamespace, symbol: string, patch: StockUpdate): Promise<StockResponse | undefined> {
+  const cur = await getStock(kv, symbol);
   if (!cur) return undefined;
-  const updated = updateTimestamps({ ...cur, ...patch, symbol });
-  stores.stocks.set(symbol, updated);
+  const updated = { ...cur, ...patch, symbol, updated_at: nowISO() } as StockResponse;
+  await kvSet(kv, KEYS.STOCKS + symbol, updated);
   return updated;
 }
 
-export function deleteStock(symbol: string): boolean {
-  return stores.stocks.delete(symbol);
+export async function deleteStock(kv: KVNamespace, symbol: string): Promise<boolean> {
+  const existing = await getStock(kv, symbol);
+  if (!existing) return false;
+  await kvDelete(kv, KEYS.STOCKS + symbol);
+  return true;
 }
 
 // ---- Transactions ----
-export function listTransactions(opts?: { symbol?: string; start_date?: string; end_date?: string }): TransactionResponse[] {
-  let items = Array.from(stores.transactions.values());
+export async function listTransactions(
+  kv: KVNamespace,
+  opts?: { symbol?: string; start_date?: string; end_date?: string }
+): Promise<TransactionResponse[]> {
+  const keys = await kvListKeys(kv, KEYS.TRANSACTIONS);
+  let items: TransactionResponse[] = [];
+  for (const key of keys) {
+    const tx = await kvGet<TransactionResponse>(kv, key);
+    if (tx) items.push(tx);
+  }
   if (opts?.symbol) items = items.filter((t) => t.symbol === opts.symbol);
   if (opts?.start_date) items = items.filter((t) => (t.date ?? t.created_at ?? "") >= opts.start_date!);
   if (opts?.end_date) items = items.filter((t) => (t.date ?? t.created_at ?? "") <= opts.end_date!);
@@ -263,14 +257,14 @@ export function listTransactions(opts?: { symbol?: string; start_date?: string; 
   return items;
 }
 
-export function getTransaction(id: string): TransactionResponse | undefined {
-  return stores.transactions.get(id);
+export async function getTransaction(kv: KVNamespace, id: string): Promise<TransactionResponse | undefined> {
+  return kvGet<TransactionResponse>(kv, KEYS.TRANSACTIONS + id);
 }
 
-export function createTransaction(input: TransactionCreate): TransactionResponse {
+export async function createTransaction(kv: KVNamespace, input: TransactionCreate): Promise<TransactionResponse> {
   const id = uuid();
   const total = Number((Number(input.quantity) * Number(input.price)).toFixed(4));
-  const record = withTimestamps({
+  const record: TransactionResponse = {
     id,
     symbol: input.symbol,
     type: input.type,
@@ -279,13 +273,19 @@ export function createTransaction(input: TransactionCreate): TransactionResponse
     date: input.date ?? nowISO(),
     notes: input.notes ?? null,
     total,
-  }) as TransactionResponse;
-  stores.transactions.set(id, record);
+    created_at: nowISO(),
+    updated_at: nowISO(),
+  };
+  await kvSet(kv, KEYS.TRANSACTIONS + id, record);
   return record;
 }
 
-export function updateTransaction(id: string, patch: TransactionUpdate): TransactionResponse | undefined {
-  const cur = stores.transactions.get(id);
+export async function updateTransaction(
+  kv: KVNamespace,
+  id: string,
+  patch: TransactionUpdate
+): Promise<TransactionResponse | undefined> {
+  const cur = await getTransaction(kv, id);
   if (!cur) return undefined;
   const next = { ...cur, ...patch } as TransactionResponse;
   if (patch.quantity != null && patch.price != null) {
@@ -295,124 +295,164 @@ export function updateTransaction(id: string, patch: TransactionUpdate): Transac
   } else if (patch.price != null) {
     next.total = Number((Number(cur.quantity) * Number(patch.price)).toFixed(4));
   }
-  const updated = updateTimestamps(next);
-  stores.transactions.set(id, updated);
+  const updated = { ...next, updated_at: nowISO() };
+  await kvSet(kv, KEYS.TRANSACTIONS + id, updated);
   return updated;
 }
 
-export function deleteTransaction(id: string): boolean {
-  return stores.transactions.delete(id);
+export async function deleteTransaction(kv: KVNamespace, id: string): Promise<boolean> {
+  const existing = await getTransaction(kv, id);
+  if (!existing) return false;
+  await kvDelete(kv, KEYS.TRANSACTIONS + id);
+  return true;
 }
 
 // ---- Dashboards ----
-export function listDashboards(): DashboardResponse[] {
-  return Array.from(stores.dashboards.values()).map((d) => d.response);
+export async function listDashboards(kv: KVNamespace): Promise<DashboardResponse[]> {
+  const keys = await kvListKeys(kv, KEYS.DASHBOARDS);
+  const dashboards: DashboardResponse[] = [];
+  for (const key of keys) {
+    const dash = await kvGet<DashboardResponse>(kv, key);
+    if (dash) dashboards.push(dash);
+  }
+  return dashboards;
 }
 
-export function getDashboard(id: string): DashboardResponse | undefined {
-  return stores.dashboards.get(id)?.response;
+export async function getDashboard(kv: KVNamespace, id: string): Promise<DashboardResponse | undefined> {
+  return kvGet<DashboardResponse>(kv, KEYS.DASHBOARDS + id);
 }
 
-export function createDashboard(input: DashboardCreate): DashboardResponse {
+export async function createDashboard(kv: KVNamespace, input: DashboardCreate): Promise<DashboardResponse> {
   const id = uuid();
-  const widgetMap = new Map<string, WidgetBase>();
-  (input.widgets ?? []).forEach((w) => widgetMap.set(w.id, w));
-  const response = withTimestamps({
+  const ts = nowISO();
+  const record: DashboardResponse = {
     id,
     name: input.name,
     description: input.description ?? null,
     widgets: (input.widgets ?? []).slice(),
     tabs: (input.tabs ?? []).slice(),
     groups: (input.groups ?? []).slice(),
-  }) as DashboardResponse;
-  stores.dashboards.set(id, { response, widgetMap });
-  return response;
+    created_at: ts,
+    updated_at: ts,
+  };
+  await kvSet(kv, KEYS.DASHBOARDS + id, record);
+  return record;
 }
 
-export function updateDashboard(id: string, patch: DashboardUpdate): DashboardResponse | undefined {
-  const cur = stores.dashboards.get(id);
+export async function updateDashboard(
+  kv: KVNamespace,
+  id: string,
+  patch: DashboardUpdate
+): Promise<DashboardResponse | undefined> {
+  const cur = await getDashboard(kv, id);
   if (!cur) return undefined;
-  const newWidgets = patch.widgets ?? cur.response.widgets ?? [];
-  const widgetMap = new Map<string, WidgetBase>();
-  newWidgets.forEach((w) => widgetMap.set(w.id, w));
-  const updated = updateTimestamps({
-    ...cur.response,
-    name: patch.name ?? cur.response.name,
-    description: patch.description !== undefined ? patch.description : cur.response.description,
-    widgets: newWidgets,
-    tabs: patch.tabs !== undefined ? patch.tabs : cur.response.tabs,
-    groups: patch.groups !== undefined ? patch.groups : cur.response.groups,
-  }) as DashboardResponse;
-  stores.dashboards.set(id, { response: updated, widgetMap });
+  const updated: DashboardResponse = {
+    ...cur,
+    name: patch.name ?? cur.name,
+    description: patch.description !== undefined ? patch.description : cur.description,
+    widgets: patch.widgets !== undefined ? patch.widgets : cur.widgets,
+    tabs: patch.tabs !== undefined ? patch.tabs : cur.tabs,
+    groups: patch.groups !== undefined ? patch.groups : cur.groups,
+    updated_at: nowISO(),
+  };
+  await kvSet(kv, KEYS.DASHBOARDS + id, updated);
   return updated;
 }
 
-export function deleteDashboard(id: string): boolean {
-  return stores.dashboards.delete(id);
+export async function deleteDashboard(kv: KVNamespace, id: string): Promise<boolean> {
+  const existing = await getDashboard(kv, id);
+  if (!existing) return false;
+  await kvDelete(kv, KEYS.DASHBOARDS + id);
+  return true;
 }
 
 // ---- Dashboard Widgets ----
-export function listDashboardWidgets(dashboardId: string): WidgetResponse[] | undefined {
-  const d = stores.dashboards.get(dashboardId);
-  return d ? Array.from(d.widgetMap.values()) : undefined;
+export async function listDashboardWidgets(
+  kv: KVNamespace,
+  dashboardId: string
+): Promise<WidgetResponse[] | undefined> {
+  const d = await getDashboard(kv, dashboardId);
+  return d?.widgets as WidgetResponse[] | undefined;
 }
 
-export function addDashboardWidget(dashboardId: string, input: WidgetCreate): WidgetResponse | undefined {
-  const d = stores.dashboards.get(dashboardId);
-  if (!d) return undefined;
-  d.widgetMap.set(input.id, input);
-  d.response.widgets = Array.from(d.widgetMap.values());
-  d.response.updated_at = nowISO();
+export async function addDashboardWidget(
+  kv: KVNamespace,
+  dashboardId: string,
+  input: WidgetCreate
+): Promise<WidgetResponse | undefined> {
+  const cur = await getDashboard(kv, dashboardId);
+  if (!cur) return undefined;
+  const widgets = [...(cur.widgets ?? []), input];
+  const updated: DashboardResponse = { ...cur, widgets, updated_at: nowISO() };
+  await kvSet(kv, KEYS.DASHBOARDS + dashboardId, updated);
   return input;
 }
 
-export function updateDashboardWidget(dashboardId: string, widgetId: string, patch: WidgetUpdate): WidgetResponse | undefined {
-  const d = stores.dashboards.get(dashboardId);
-  if (!d) return undefined;
-  const cur = d.widgetMap.get(widgetId);
+export async function updateDashboardWidget(
+  kv: KVNamespace,
+  dashboardId: string,
+  widgetId: string,
+  patch: WidgetUpdate
+): Promise<WidgetResponse | undefined> {
+  const cur = await getDashboard(kv, dashboardId);
   if (!cur) return undefined;
-  const updated = {
-    ...cur,
-    title: patch.title !== undefined ? patch.title : cur.title,
-    position: patch.position !== undefined ? patch.position : cur.position,
-    data: patch.data !== undefined ? patch.data : cur.data,
-  } as WidgetBase;
-  d.widgetMap.set(widgetId, updated);
-  d.response.widgets = Array.from(d.widgetMap.values());
-  d.response.updated_at = nowISO();
-  return updated;
+  const widgets = (cur.widgets ?? []).map((w) => {
+    if (w.id !== widgetId) return w;
+    return {
+      ...w,
+      title: patch.title !== undefined ? patch.title : w.title,
+      position: patch.position !== undefined ? patch.position : w.position,
+      data: patch.data !== undefined ? patch.data : w.data,
+    } as WidgetBase;
+  });
+  const updated: DashboardResponse = { ...cur, widgets, updated_at: nowISO() };
+  await kvSet(kv, KEYS.DASHBOARDS + dashboardId, updated);
+  return widgets.find((w) => w.id === widgetId);
 }
 
-export function deleteDashboardWidget(dashboardId: string, widgetId: string): boolean {
-  const d = stores.dashboards.get(dashboardId);
-  if (!d || !d.widgetMap.has(widgetId)) return false;
-  d.widgetMap.delete(widgetId);
-  d.response.widgets = Array.from(d.widgetMap.values());
-  d.response.updated_at = nowISO();
+export async function deleteDashboardWidget(kv: KVNamespace, dashboardId: string, widgetId: string): Promise<boolean> {
+  const cur = await getDashboard(kv, dashboardId);
+  if (!cur) return false;
+  const widgets = (cur.widgets ?? []).filter((w) => w.id !== widgetId);
+  if (widgets.length === (cur.widgets ?? []).length) return false;
+  const updated: DashboardResponse = { ...cur, widgets, updated_at: nowISO() };
+  await kvSet(kv, KEYS.DASHBOARDS + dashboardId, updated);
   return true;
 }
 
 // ---- Sessions ----
-export function listSessions(): { id: string; title: string; created_at: string; updated_at: string }[] {
-  return Array.from(stores.sessions.values());
-}
-
-export function getSession(id: string) {
-  return stores.sessions.get(id);
-}
-
-export function ensureSession(id: string, title?: string) {
-  const existing = stores.sessions.get(id);
-  if (existing) {
-    existing.updated_at = nowISO();
-    return existing;
+export async function listSessions(
+  kv: KVNamespace
+): Promise<{ id: string; title: string; created_at: string; updated_at: string }[]> {
+  const keys = await kvListKeys(kv, KEYS.SESSIONS);
+  const sessions: { id: string; title: string; created_at: string; updated_at: string }[] = [];
+  for (const key of keys) {
+    const s = await kvGet<{ id: string; title: string; created_at: string; updated_at: string }>(kv, key);
+    if (s) sessions.push(s);
   }
+  return sessions;
+}
+
+export async function getSession(kv: KVNamespace, id: string) {
+  return kvGet<{ id: string; title: string; created_at: string; updated_at: string }>(kv, KEYS.SESSIONS + id);
+}
+
+export async function ensureSession(kv: KVNamespace, id: string, title?: string) {
+  const existing = await getSession(kv, id);
   const ts = nowISO();
+  if (existing) {
+    const updated = { ...existing, updated_at: ts };
+    await kvSet(kv, KEYS.SESSIONS + id, updated);
+    return updated;
+  }
   const rec = { id, title: title ?? `Session ${id.slice(0, 8)}`, created_at: ts, updated_at: ts };
-  stores.sessions.set(id, rec);
+  await kvSet(kv, KEYS.SESSIONS + id, rec);
   return rec;
 }
 
-export function clearSessions(): void {
-  stores.sessions.clear();
+export async function clearSessions(kv: KVNamespace): Promise<void> {
+  const keys = await kvListKeys(kv, KEYS.SESSIONS);
+  for (const key of keys) {
+    await kvDelete(kv, key);
+  }
 }

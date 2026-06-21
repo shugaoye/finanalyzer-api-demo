@@ -2,6 +2,7 @@ import { json, notFound, badRequest, validationError, readJSON } from "./utils";
 import { appsJson, agentsJson, widgetsJson } from "./static";
 import { openApiSpec } from "./openapi";
 import {
+  initStore,
   listStocks,
   getStock,
   createStock,
@@ -122,13 +123,13 @@ async function handleProxy(url: string, method: string, body: Request | null, he
   }
 }
 
-async function handleQuery(body: any): Promise<Response> {
+async function handleQuery(kv: KVNamespace, body: any): Promise<Response> {
   const q: QueryRequest = body ?? {};
   if (!q.query) {
     return validationError([{ loc: ["body", "query"], msg: "Field required", type: "missing" }]);
   }
   const sessionId = q.session_id ?? `sess-${Date.now()}`;
-  ensureSession(sessionId, q.query.slice(0, 60));
+  await ensureSession(kv, sessionId, q.query.slice(0, 60));
   if (q.stream) {
     const encoder = new TextEncoder();
     const stream = new ReadableStream({
@@ -166,7 +167,7 @@ function methodNotAllowed(): Response {
   return json({ error: "Method Not Allowed" }, 405);
 }
 
-export async function handleRoute(url: URL, request: Request): Promise<Response> {
+export async function handleRoute(url: URL, request: Request, kv: KVNamespace): Promise<Response> {
   const path = url.pathname;
   const search = url.searchParams;
   const method = request.method;
@@ -209,7 +210,7 @@ export async function handleRoute(url: URL, request: Request): Promise<Response>
 
   // ---- /api/v1/sessions ----
   if (path === "/api/v1/sessions") {
-    if (method === "GET") return json(listSessions());
+    if (method === "GET") return json(await listSessions(kv));
     return methodNotAllowed();
   }
 
@@ -223,7 +224,7 @@ export async function handleRoute(url: URL, request: Request): Promise<Response>
   if (path === "/api/v1/query") {
     if (method !== "POST") return methodNotAllowed();
     const body = await readJSON(request);
-    return handleQuery(body);
+    return handleQuery(kv, body);
   }
 
   // ---- /api/v1/terminate ----
@@ -235,7 +236,7 @@ export async function handleRoute(url: URL, request: Request): Promise<Response>
   // ---- /api/v1/clear-sessions ----
   if (path === "/api/v1/clear-sessions") {
     if (method !== "POST") return methodNotAllowed();
-    clearSessions();
+    await clearSessions(kv);
     return json({ status: "ok", message: "Sessions cleared" });
   }
 
@@ -266,18 +267,18 @@ export async function handleRoute(url: URL, request: Request): Promise<Response>
   if (path === "/api/v1/symbols") {
     if (method !== "GET") return methodNotAllowed();
     const symbols = defaultSymbols();
-    const fromPortfolio = listStocks().map((s) => s.symbol);
+    const fromPortfolio = (await listStocks(kv)).map((s) => s.symbol);
     const merged = Array.from(new Set([...fromPortfolio, ...symbols]));
     return json({ count: merged.length, symbols: merged });
   }
 
   // ---- Portfolio: stocks ----
   if (path === "/api/v1/portfolio/stocks") {
-    if (method === "GET") return json(listStocks());
+    if (method === "GET") return json(await listStocks(kv));
     if (method === "POST") {
       const body = (await readJSON(request)) as StockCreate;
       if (!body?.symbol) return validationError([{ loc: ["body", "symbol"], msg: "Field required", type: "missing" }]);
-      return json(createStock(body));
+      return json(await createStock(kv, body));
     }
     return methodNotAllowed();
   }
@@ -285,16 +286,16 @@ export async function handleRoute(url: URL, request: Request): Promise<Response>
     const symbol = decodeURIComponent(path.slice("/api/v1/portfolio/stocks/".length));
     if (!symbol) return notFound();
     if (method === "GET") {
-      const s = getStock(symbol);
+      const s = await getStock(kv, symbol);
       return s ? json(s) : notFound(`Stock ${symbol} not found`);
     }
     if (method === "PUT") {
       const body = (await readJSON(request)) as StockUpdate;
-      const updated = updateStock(symbol, body);
+      const updated = await updateStock(kv, symbol, body);
       return updated ? json(updated) : notFound(`Stock ${symbol} not found`);
     }
     if (method === "DELETE") {
-      const ok = deleteStock(symbol);
+      const ok = await deleteStock(kv, symbol);
       return ok ? json({ success: true, symbol }) : notFound(`Stock ${symbol} not found`);
     }
     return methodNotAllowed();
@@ -305,7 +306,7 @@ export async function handleRoute(url: URL, request: Request): Promise<Response>
     if (method !== "POST") return methodNotAllowed();
     const body = (await readJSON(request)) as StockDeleteRequest;
     if (!body?.symbol) return validationError([{ loc: ["body", "symbol"], msg: "Field required", type: "missing" }]);
-    const ok = deleteStock(body.symbol);
+    const ok = await deleteStock(kv, body.symbol);
     return json({ success: ok, symbol: body.symbol, message: ok ? "Deleted" : "Not found" });
   }
 
@@ -313,7 +314,7 @@ export async function handleRoute(url: URL, request: Request): Promise<Response>
   if (path === "/api/v1/portfolio/transactions") {
     if (method === "GET")
       return json(
-        listTransactions({
+        await listTransactions(kv, {
           symbol: search.get("symbol") ?? undefined,
           start_date: search.get("start_date") ?? undefined,
           end_date: search.get("end_date") ?? undefined,
@@ -328,7 +329,7 @@ export async function handleRoute(url: URL, request: Request): Promise<Response>
         if (body?.price == null) errors.push({ loc: ["body", "price"], msg: "Field required", type: "missing" });
         return validationError(errors);
       }
-      return json(createTransaction(body));
+      return json(await createTransaction(kv, body));
     }
     return methodNotAllowed();
   }
@@ -336,16 +337,16 @@ export async function handleRoute(url: URL, request: Request): Promise<Response>
     const id = path.slice("/api/v1/portfolio/transactions/".length);
     if (!id) return notFound();
     if (method === "GET") {
-      const t = getTransaction(id);
+      const t = await getTransaction(kv, id);
       return t ? json(t) : notFound(`Transaction ${id} not found`);
     }
     if (method === "PUT") {
       const body = (await readJSON(request)) as TransactionUpdate;
-      const updated = updateTransaction(id, body);
+      const updated = await updateTransaction(kv, id, body);
       return updated ? json(updated) : notFound(`Transaction ${id} not found`);
     }
     if (method === "DELETE") {
-      const ok = deleteTransaction(id);
+      const ok = await deleteTransaction(kv, id);
       return ok ? json({ success: true, id }) : notFound(`Transaction ${id} not found`);
     }
     return methodNotAllowed();
@@ -354,7 +355,7 @@ export async function handleRoute(url: URL, request: Request): Promise<Response>
   // ---- Portfolio: validate ----
   if (path === "/api/v1/portfolio/validate") {
     if (method !== "GET") return methodNotAllowed();
-    return json(validatePortfolio(listStocks(), listTransactions()));
+    return json(await validatePortfolio(await listStocks(kv), await listTransactions(kv)));
   }
 
   // ---- Portfolio: key_metrics ----
@@ -376,11 +377,11 @@ export async function handleRoute(url: URL, request: Request): Promise<Response>
 
   // ---- Dashboard ----
   if (path === "/api/v1/dashboard") {
-    if (method === "GET") return json(listDashboards());
+    if (method === "GET") return json(await listDashboards(kv));
     if (method === "POST") {
       const body = (await readJSON(request)) as DashboardCreate;
       if (!body?.name) return validationError([{ loc: ["body", "name"], msg: "Field required", type: "missing" }]);
-      return json(createDashboard(body));
+      return json(await createDashboard(kv, body));
     }
     return methodNotAllowed();
   }
@@ -388,7 +389,7 @@ export async function handleRoute(url: URL, request: Request): Promise<Response>
     const tpl = decodeURIComponent(path.slice("/api/v1/dashboard/template/".length));
     if (method === "POST") {
       const data = buildDashboardFromTemplate(tpl);
-      const created = createDashboard({
+      const created = await createDashboard(kv, {
         name: data.name,
         description: data.description,
         widgets: data.widgets,
@@ -405,16 +406,16 @@ export async function handleRoute(url: URL, request: Request): Promise<Response>
     if (!maybeWidgets) {
       // dashboard by id
       if (method === "GET") {
-        const d = getDashboard(dashboardId);
+        const d = await getDashboard(kv, dashboardId);
         return d ? json(d) : notFound(`Dashboard ${dashboardId} not found`);
       }
       if (method === "PUT") {
         const body = (await readJSON(request)) as DashboardUpdate;
-        const updated = updateDashboard(dashboardId, body);
+        const updated = await updateDashboard(kv, dashboardId, body);
         return updated ? json(updated) : notFound(`Dashboard ${dashboardId} not found`);
       }
       if (method === "DELETE") {
-        const ok = deleteDashboard(dashboardId);
+        const ok = await deleteDashboard(kv, dashboardId);
         return ok ? json({ success: true, id: dashboardId }) : notFound(`Dashboard ${dashboardId} not found`);
       }
       return methodNotAllowed();
@@ -422,7 +423,7 @@ export async function handleRoute(url: URL, request: Request): Promise<Response>
     if (maybeWidgets === "widgets") {
       if (!widgetId) {
         if (method === "GET") {
-          const list = listDashboardWidgets(dashboardId);
+          const list = await listDashboardWidgets(kv, dashboardId);
           return list === undefined ? notFound(`Dashboard ${dashboardId} not found`) : json(list);
         }
         if (method === "POST") {
@@ -435,7 +436,7 @@ export async function handleRoute(url: URL, request: Request): Promise<Response>
               { loc: ["body", "position"], msg: "Field required", type: "missing" },
             ]);
           }
-          const w = addDashboardWidget(dashboardId, body);
+          const w = await addDashboardWidget(kv, dashboardId, body);
           return w ? json(w) : notFound(`Dashboard ${dashboardId} not found`);
         }
         return methodNotAllowed();
@@ -443,11 +444,11 @@ export async function handleRoute(url: URL, request: Request): Promise<Response>
       // widget by id
       if (method === "PUT") {
         const body = (await readJSON(request)) as WidgetUpdate;
-        const w = updateDashboardWidget(dashboardId, widgetId, body);
+        const w = await updateDashboardWidget(kv, dashboardId, widgetId, body);
         return w ? json(w) : notFound(`Widget ${widgetId} in dashboard ${dashboardId} not found`);
       }
       if (method === "DELETE") {
-        const ok = deleteDashboardWidget(dashboardId, widgetId);
+        const ok = await deleteDashboardWidget(kv, dashboardId, widgetId);
         return ok ? json({ success: true, id: widgetId }) : notFound(`Widget ${widgetId} in dashboard ${dashboardId} not found`);
       }
       return methodNotAllowed();
@@ -474,13 +475,13 @@ export async function handleRoute(url: URL, request: Request): Promise<Response>
 }
 
 interface Env {
-  // bindings declared here, none in current config
+  STORE: KVNamespace;
 }
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-    void env;
     void ctx;
+    await initStore(env.STORE);
     const url = new URL(request.url);
     // CORS
     if (request.method === "OPTIONS") {
@@ -494,7 +495,7 @@ export default {
       });
     }
     try {
-      const resp = await handleRoute(url, request);
+      const resp = await handleRoute(url, request, env.STORE);
       if (!resp.headers.get("access-control-allow-origin")) resp.headers.set("access-control-allow-origin", "*");
       return resp;
     } catch (err: any) {
